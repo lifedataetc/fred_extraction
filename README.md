@@ -1,6 +1,1 @@
-# fred_extraction
-# fred_extraction
-# fred_extraction
-# fred_extraction
-# fred_extraction
-# fred_extraction
+# FRED Time Series Data Collection
