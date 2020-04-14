@@ -10,3 +10,9 @@ for each in tqdm(SERIES):
                                                  serial_id = tfd.name,
                                                  log_message = out_log)
     connect_and_execute(e_query)
+
+
+# update yield curve data
+all_dates,full_query = yc_refresh()
+connect_and_execute(all_dates)
+connect_and_execute(full_query)

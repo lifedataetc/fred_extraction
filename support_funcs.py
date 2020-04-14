@@ -3,6 +3,63 @@ from fredapi import Fred
 from string import Template
 from config import *
 
+# function to create data refresh queries
+def yc_refresh():
+    # date extraction
+    cte_template = Template("""$series AS(SELECT DISTINCT ON (date) date,value FROM fin_ts.$table_name)""")
+
+    date_select = Template("""(SELECT DISTINCT date FROM $cte_name)\n""")
+
+    # build out the yield curve data set
+    main_q_template = Template("""
+    SELECT
+        AD.*,
+    $select_block
+    INTO fin_ts.yield_curve
+    FROM fin_ts.all_dates AS AD
+    $join_block;
+    """)
+
+    join_q_template = Template("""
+    LEFT OUTER JOIN $table_name AS $series
+        ON AD.date = $series.date""")
+
+    select_q_template = Template("""    $series.value AS ${series}_rate,""")
+
+    # build out all the cte statements
+    all_cte_temp = []
+    all_dates_temp = []
+    for each in SERIES:
+        all_cte_temp.append(cte_template.substitute(series = each, table_name = each.lower()))
+        all_dates_temp.append(date_select.substitute(cte_name=each))
+
+    # create cte block
+    cte_block = 'WITH '+',\n'.join(all_cte_temp) + ',\n'
+
+    # get all dates
+    all_dates = 'UNION\n'.join(all_dates_temp)
+
+    # build out an indexed table of all dates to build yield curves later
+    all_date_block = 'DROP TABLE IF EXISTS fin_ts.all_dates;\n'
+    all_date_block = all_date_block + cte_block + 'all_dates_temp AS(' + all_dates + ')'
+    all_date_block = all_date_block + 'SELECT DISTINCT date INTO fin_ts.all_dates FROM all_dates_temp ORDER BY date DESC;\n'
+    all_date_block = all_date_block + 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA fin_ts TO fred;\nCREATE INDEX idx_fred_dates ON fin_ts.all_dates(date);'
+
+    joins_temp = []
+    select_temp = []
+    for each in SERIES:
+        joins_temp.append(join_q_template.substitute(table_name=each.lower(),series=each))
+        select_temp.append(select_q_template.substitute(series=each))
+
+    join_block = ''.join(joins_temp)
+    select_block = '\n'.join(select_temp)[:-1]
+
+    full_query = 'DROP TABLE IF EXISTS fin_ts.yield_curve;\n'
+    full_query = full_query + cte_block[:-2] + main_q_template.substitute(select_block=select_block,join_block=join_block)
+    full_query = full_query + 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA fin_ts TO fred;\nCREATE INDEX idx_yc_dates ON fin_ts.yield_curve(date);'
+
+    return([all_date_block,full_query])
+
 def connect_and_execute(query):
     try:
         # connect to the system
