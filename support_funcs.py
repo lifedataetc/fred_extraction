@@ -77,9 +77,6 @@ def connect_and_execute(query):
         conn.close()
     except Exception as err:
         print(str(err))
-        conn.rollback()
-        cur.close()
-        conn.close()
 
 # Assign API key
 class fred_datum:

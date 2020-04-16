@@ -4,7 +4,7 @@ DB_NAME = 'fred_ts'
 SCHEMA_NAME = 'fin_ts'
 ETL_LOG_TABLE = 'etl_log'
 
-CONNECTION_STRING = "dbname=fred_ts host=localhost user=fred"
+CONNECTION_STRING = "dbname=fred_ts host=localhost user=fred password=180389"
 
 API_KEY = '840edf0dfd657ca4a7328d5a17e04598'
 
@@ -45,7 +45,6 @@ CREATE TABLE $schema_name.$table_name (
     value DOUBLE PRECISION NULL
 );
 
-SELECT create_hypertable('$schema_name.$table_name','date');
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA $schema_name TO fred;
 """)
 
