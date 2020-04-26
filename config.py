@@ -10,7 +10,8 @@ API_KEY = '840edf0dfd657ca4a7328d5a17e04598'
 
 SERIES = [
     'DGS1MO','DGS3MO','DGS6MO','DGS1','DGS2',
-    'DGS3','DGS5','DGS7','DGS10','DGS20','DGS30'
+    'DGS3','DGS5','DGS7','DGS10','DGS20','DGS30',
+    'JHDUSRGDPBR'
         ]
 
 # SQL templates
