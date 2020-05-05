@@ -45,7 +45,7 @@ CREATE TABLE $schema_name.$table_name (
     date DATE NOT NULL,
     value DOUBLE PRECISION NULL
 );
-
+GRANT ALL PRIVILEGES ON SCHEMA $schema_name TO fred;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA $schema_name TO fred;
 """)
 

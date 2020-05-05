@@ -24,7 +24,7 @@ def yc_refresh():
     LEFT OUTER JOIN $table_name AS $series
         ON AD.date = $series.date""")
 
-    select_q_template = Template("""    $series.value AS ${series}_rate,""")
+    select_q_template = Template("""    $series.value AS ${series}_val,""")
 
     # build out all the cte statements
     all_cte_temp = []
