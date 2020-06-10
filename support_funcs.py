@@ -1,124 +1,100 @@
-import psycopg2 as pc2
+import datetime as dt
+import psycopg2 as pg
 from fredapi import Fred
 from string import Template
 from config import *
 
-# function to create data refresh queries
-def yc_refresh():
-    # date extraction
-    cte_template = Template("""$series AS(SELECT DISTINCT ON (date) date,value FROM fin_ts.$table_name)""")
 
-    date_select = Template("""(SELECT DISTINCT date FROM $cte_name)\n""")
+# ---------------------------------------------------------------------------------------------------#
+## SQL Functions
+# ---------------------------------------------------------------------------------------------------#
+def execute_q(query,conn_str=CONNECTION_STRING):
+    """simple function to connect and execute a query"""
+    conn = pg.connect(conn_str)
+    cur = conn.cursor()
+    cur.execute(query)
+    cur.close()
+    conn.commit()
+    conn.close()
+    return([True,None])
 
-    # build out the yield curve data set
-    main_q_template = Template("""
-    SELECT
-        AD.*,
-    $select_block
-    INTO fin_ts.yield_curve
-    FROM fin_ts.all_dates AS AD
-    $join_block;
-    """)
+def select_data(query,con_str=CONNECTION_STRING):
+    """simple function to connect and select data"""
+    conn = pg.connect(con_str)
+    cur = conn.cursor()
+    cur.execute(query)
+    data = cur.fetchall()
+    cur.close()
+    conn.close()
+    return(data)
 
-    join_q_template = Template("""
-    LEFT OUTER JOIN $table_name AS $series
-        ON AD.date = $series.date""")
+# ---------------------------------------------------------------------------------------------------#
+## Utility Functions
+# ---------------------------------------------------------------------------------------------------#
+# insert template maker
+def insert_query_maker(table_name,cols):
+    vals = ','.join(['%s']*len(cols))
+    cols_str = ','.join(cols)
+    temp = INSERT_TEMPLATE.substitute(schema_name=SCHEMA_NAME,table_name=table_name,
+                                      cols=cols_str,vals=vals)
+    return(temp)
 
-    select_q_template = Template("""    $series.value AS ${series}_val,""")
+def process_log(res):
+    """simple function to connect and load data for ETL log"""
+    cols = list(res.keys())
+    vals = tuple(res.values())
+    temp = insert_query_maker(ETL_LOG_TABLE,cols)
 
-    # build out all the cte statements
-    all_cte_temp = []
-    all_dates_temp = []
-    for each in SERIES:
-        all_cte_temp.append(cte_template.substitute(series = each, table_name = each.lower()))
-        all_dates_temp.append(date_select.substitute(cte_name=each))
+    conn = pg.connect(CONNECTION_STRING)
+    cur = conn.cursor()
+    cur.execute(temp,vars=vals)
+    conn.commit()
+    cur.close()
+    conn.close()
+# ---------------------------------------------------------------------------------------------------#
+## Logging
+# ---------------------------------------------------------------------------------------------------#
+def ETL_table_check():
+    qry = ETL_TABLE_SETUP.substitute(schema_name=SCHEMA_NAME,table_name=ETL_LOG_TABLE,user=DB_ANALYST_USER)
+    flag,err = execute_q(qry)
 
-    # create cte block
-    cte_block = 'WITH '+',\n'.join(all_cte_temp) + ',\n'
-
-    # get all dates
-    all_dates = 'UNION\n'.join(all_dates_temp)
-
-    # build out an indexed table of all dates to build yield curves later
-    all_date_block = 'DROP TABLE IF EXISTS fin_ts.all_dates;\n'
-    all_date_block = all_date_block + cte_block + 'all_dates_temp AS(' + all_dates + ')'
-    all_date_block = all_date_block + 'SELECT DISTINCT date INTO fin_ts.all_dates FROM all_dates_temp ORDER BY date DESC;\n'
-    all_date_block = all_date_block + 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA fin_ts TO fred;\nCREATE INDEX idx_fred_dates ON fin_ts.all_dates(date);'
-
-    joins_temp = []
-    select_temp = []
-    for each in SERIES:
-        joins_temp.append(join_q_template.substitute(table_name=each.lower(),series=each))
-        select_temp.append(select_q_template.substitute(series=each))
-
-    join_block = ''.join(joins_temp)
-    select_block = '\n'.join(select_temp)[:-1]
-
-    full_query = 'DROP TABLE IF EXISTS fin_ts.yield_curve;\n'
-    full_query = full_query + cte_block[:-2] + main_q_template.substitute(select_block=select_block,join_block=join_block)
-    full_query = full_query + 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA fin_ts TO fred;\nCREATE INDEX idx_yc_dates ON fin_ts.yield_curve(date);'
-
-    return([all_date_block,full_query])
-
-def connect_and_execute(query):
-    try:
-        # connect to the system
-        conn = pc2.connect(CONNECTION_STRING)
-        cur = conn.cursor()
-        cur.execute(query)
-        conn.commit()
-        cur.close()
-        conn.close()
-    # some basic error handling
-    except pc2.Error as err:
-        print(str(err))
-        conn.rollback()
-        cur.close()
-        conn.close()
-    except Exception as err:
-        print(str(err))
-
-# Assign API key
+# ---------------------------------------------------------------------------------------------------#
+## Time-series class
+# ---------------------------------------------------------------------------------------------------#
 class fred_datum:
     def __init__(self,name):
         self.name  = name
         self.schema_name = SCHEMA_NAME
-        self.tb_exists = self.db_check()
-        #self.last_datum = self.last_datum()
-        self.new_data = self.get_all_data()
+        # ensure table exists for this series
+        self.db_check()
+        # get the last update information available
+        self.exists_in_db, self.series_last_updated = self.last_datum()
 
     # fucntion to check if table exists for this data set
     def db_check(self):
-        conn = pc2.connect(CONNECTION_STRING)
-        cur = conn.cursor()
-        query = table_check_template.substitute(schema_name=self.schema_name.lower(),
-                                                table_name=self.name.lower())
-        cur.execute(query)
-        data = cur.fetchall()
-        cur.close()
-        conn.close()
+        query = SERIES_TABLE_SETUP.substitute(schema_name=self.schema_name,table_name=self.name,user=DB_ANALYST_USER)
+        execute_q(query)
 
-        return(data[0][0])
+    def get_last_updated(self):
+        fred = Fred(api_key=API_KEY)
+        series_info = fred.get_series_info(self.name)
+        return(dt.datetime.fromisoformat(series_info.last_updated + ':00'))
 
-    # not used at the moment
     # function to check what the last update was for this data set
     def last_datum(self):
-        if self.tb_exists:
-            conn = pc2.connect(CONNECTION_STRING)
-            cur = conn.cursor()
-            query = last_date_template.substitute(schema_name=self.schema_name.lower(),
-                                                  table_name=self.name.lower())
-            cur.execute(query)
-            data = cur.fetchall()
-            cur.close()
-            conn.close()
+        query = LAST_UPDATE_DT_TEMPLATE.substitute(schema_name=self.schema_name,
+                                                   table_name=ETL_LOG_TABLE,
+                                                   series_id=self.name)
+        data = select_data(query)
 
-            return(data[0][0])
+        # if the return is null, then series has not been extracted
+        if not data[0][0]:
+            return([False,self.get_last_updated()])
         else:
-            return(0)
+            return([True,data[0][0]])
 
-    # get newest data for the current data set
-    def get_all_data(self):
+    # get the newest series data
+    def api_get_data(self):
         fred = Fred(api_key=API_KEY)
         data = fred.get_series_all_releases(series_id=self.name)
         data.dropna(inplace=True)
@@ -127,45 +103,59 @@ class fred_datum:
 
         return(data)
 
-    def upload_data(self):
-        insert_q = insert_template.substitute(schema_name=self.schema_name.lower(),
-                                              table_name=self.name.lower())
+    def get_data(self):
+        self.data = self.api_get_data()
 
-        drop_q = drop_template.substitute(schema_name=self.schema_name.lower(),
-                                                  table_name=self.name.lower())
-
-        create_q = create_template.substitute(schema_name=self.schema_name.lower(),
-                                              table_name=self.name.lower())
-
+    def connect_and_load(self):
+        """simple function to connect and load data"""
+        # number of entries successfully processed
+        data = self.data.to_dict(orient='records')
+        d_len = len(data)
+        i = 0
+        error_log = []
+        # truncate data before uploading the new data
+        qry = TRUNCATE_TEMPLATE.substitute(schema_name=SCHEMA_NAME,table_name=self.name.lower())
+        execute_q(qry)
         try:
-            # connect to the system
-            conn = pc2.connect(CONNECTION_STRING)
-            cur = conn.cursor()
-            cur.execute(drop_q)
-            cur.execute(create_q)
-            cur.executemany(insert_q, list(self.new_data.to_records(index=False)))
-            conn.commit()
-            cur.close()
-            conn.close()
-            return(True)
+            # process each entry produced from the process above
+            for each in data:
+                cols = list(each.keys())
+                vals = tuple(each.values())
+                temp = insert_query_maker(self.name.lower(),cols)
 
-        # some basic error handling
-        except pc2.Error as err:
-            return(str(err))
-            conn.rollback()
-            cur.close()
-            conn.close()
+                try:
+                    # connect to the system
+                    conn = pg.connect(CONNECTION_STRING)
+                    cur = conn.cursor()
+                    cur.execute(temp,vars=vals)
+                    i += 1
+                    conn.commit()
+                    cur.close()
+                    conn.close()
+                # some basic error handling
+                except pg.Error as err:
+                    error_log.append(str(err))
+                    try:
+                        conn.rollback()
+                        cur.close()
+                        conn.close()
+                    except:
+                        pass
+                except Exception as err:
+                    error_log.append(str(err))
+                    try:
+                        conn.rollback()
+                        cur.close()
+                        conn.close()
+                    except:
+                        pass
+
+            #res_flag, error_message, i, error_log
+            return({'success_flag':True, 'error_message':None, 'items_processed':i,
+                    'log_messages':error_log, 'series_id':self.name,'total_items':d_len,
+                    'series_last_updated':self.series_last_updated})
+
         except Exception as err:
-            return(str(err))
-            conn.rollback()
-            cur.close()
-            conn.close()
-
-    def process_data(self):
-        flag = self.upload_data()
-        if flag:
-            out_log = 'None'
-        else:
-            out_log = flag
-
-        return(out_log)
+            return({'success_flag':False, 'error_message':str(err), 'items_processed':i,
+                    'log_messages':error_log, 'series_id':self.name,'total_items':d_len,
+                    'series_last_updated':self.series_last_updated})
