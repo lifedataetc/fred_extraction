@@ -12,9 +12,12 @@ with open('tickers.dat','r') as f:
 tickers = list(map(lambda x: x.replace('\n',''),tickers))
 
 all_tickers = SERIES + tickers
-
+i = 0
 # loop through each series
-for each in tqdm(all_tickers):
+for each in all_tickers:
+    i = i + 1
+    if i % 10 == 0 and i > 1:
+        print('Working on series number {} of {}'.format(i.len(all_tickers)))
     try:
         cur_series = fred_datum(each)
         # if we don't have the given time-series, then we must get it
