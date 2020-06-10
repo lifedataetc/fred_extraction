@@ -1,5 +1,6 @@
 import datetime as dt
 import psycopg2 as pg
+import pandas as pd
 from fredapi import Fred
 from string import Template
 from config import *
@@ -65,8 +66,6 @@ class fred_datum:
     def __init__(self,name):
         self.name  = name
         self.schema_name = SCHEMA_NAME
-        # ensure table exists for this series
-        self.db_check()
         # get the last update information available
         self.exists_in_db, self.series_last_updated = self.last_datum()
 
@@ -96,10 +95,11 @@ class fred_datum:
     # get the newest series data
     def api_get_data(self):
         fred = Fred(api_key=API_KEY)
-        data = fred.get_series_all_releases(series_id=self.name)
+        data = fred.get_series_latest_release(series_id=self.name)
         data.dropna(inplace=True)
-        data['realtime_start'] = data.apply(lambda x: str(x.realtime_start.date()),axis=1)
-        data['date'] = data.apply(lambda x: str(x.date.date()),axis=1)
+        data = pd.DataFrame(data)
+        data.reset_index(inplace=True)
+        data.columns = ['date','value']
 
         return(data)
 

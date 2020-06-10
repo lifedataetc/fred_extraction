@@ -28,7 +28,6 @@ SELECT MAX(date) FROM $schema_name.$table_name;
 
 SERIES_INSERT_TEMPLATE = Template("""
 INSERT INTO $schema_name.$table_name VALUES (
-    %(realtime_start)s,
     %(date)s,
     %(value)s
 );
@@ -65,7 +64,6 @@ CREATE INDEX IF NOT EXISTS etl_series_id ON $schema_name.$table_name(series_id);
 SERIES_TABLE_SETUP = Template("""
 CREATE SCHEMA IF NOT EXISTS $schema_name;
 CREATE TABLE IF NOT EXISTS $schema_name.$table_name (
-    realtime_start DATE NOT NULL,
     date DATE NOT NULL,
     value DOUBLE PRECISION NULL
 );
