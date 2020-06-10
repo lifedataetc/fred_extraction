@@ -17,7 +17,7 @@ i = 0
 for each in all_tickers:
     i = i + 1
     if i % 10 == 0 and i > 1:
-        print('Working on series number {} of {}'.format(i.len(all_tickers)))
+        print('Working on series number {} of {}'.format(i,len(all_tickers)))
     try:
         cur_series = fred_datum(each)
         # if we don't have the given time-series, then we must get it
