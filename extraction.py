@@ -32,7 +32,12 @@ for each in all_tickers:
             # if there is a new release available, then get the data
             if last_updated_by_fred > cur_series.series_last_updated:
                 cur_series.get_data()
+                cur_series.series_last_updated = last_updated_by_fred
                 res = cur_series.connect_and_load()
                 process_log(res)
-    except:
+            else:
+                print('No new data for {}'.format(each))
+    
+    except Exception as err:
+        print(err)
         print("could not process series {}".format(each))
