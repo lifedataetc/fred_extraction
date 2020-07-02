@@ -1,6 +1,7 @@
 from tqdm import tqdm
 from config import *
 from support_funcs import *
+from datetime import datetime
 
 # ensure ETL table exists
 ETL_table_check()
@@ -17,7 +18,7 @@ i = 0
 for each in all_tickers:
     i = i + 1
     if i % 10 == 0 and i > 1:
-        print('Working on series number {} of {}'.format(i,len(all_tickers)))
+        print('{}: Working on series number {} of {}'.format(str(datetime.now()),i,len(all_tickers)))
     try:
         cur_series = fred_datum(each)
         # if we don't have the given time-series, then we must get it
@@ -36,8 +37,8 @@ for each in all_tickers:
                 res = cur_series.connect_and_load()
                 process_log(res)
             else:
-                print('No new data for {}'.format(each))
+                print('{}: No new data for {}'.format(str(datetime.now()),each))
     
     except Exception as err:
         print(err)
-        print("could not process series {}".format(each))
+        print("{}: could not process series {}".format(str(datetime.now()),each))
