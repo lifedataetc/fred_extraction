@@ -1,44 +1,27 @@
-from tqdm import tqdm
-from config import *
 from support_funcs import *
-from datetime import datetime
+from config import *
+
+sn = Snow()
 
 # ensure ETL table exists
-ETL_table_check()
+# qry = ETL_TABLE_SETUP.substitute(db_name=DB_NAME,schema_name=SCHEMA_NAME,table_name=ETL_LOG_TABLE)
+# sn.tb_check(qry)
 
 # open tickers
 with open('tickers.dat','r') as f:
     tickers = f.readlines()
 
-tickers = list(map(lambda x: x.replace('\n',''),tickers))
+all_tickers = list(map(lambda x: x.replace('\n',''),tickers))
 
-all_tickers = SERIES + tickers
 i = 0
 # loop through each series
 for each in all_tickers:
     i = i + 1
     if i % 10 == 0 and i > 1:
         print('{}: Working on series number {} of {}'.format(str(datetime.now()),i,len(all_tickers)))
+        
     try:
-        cur_series = fred_datum(each)
-        # if we don't have the given time-series, then we must get it
-        if not cur_series.exists_in_db:
-            cur_series.get_data()
-            cur_series.db_check()
-            res = cur_series.connect_and_load()
-            process_log(res)
-
-        else:
-            last_updated_by_fred = cur_series.get_last_updated()
-            # if there is a new release available, then get the data
-            if last_updated_by_fred > cur_series.series_last_updated:
-                cur_series.get_data()
-                cur_series.series_last_updated = last_updated_by_fred
-                res = cur_series.connect_and_load()
-                process_log(res)
-            else:
-                print('{}: No new data for {}'.format(str(datetime.now()),each))
-    
-    except Exception as err:
-        print(err)
-        print("{}: could not process series {}".format(str(datetime.now()),each))
+        cur_series = FredDatum(each)
+        res = cur_series.update_series_db(sn)
+    except Exception as e:
+        print('Series {} had an error {}'.format(each,str(e)))
