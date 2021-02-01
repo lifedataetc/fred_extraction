@@ -101,11 +101,11 @@ class FredDatum:
         self.data = self.api_get_data()
         
     def upload_data(self,sn):
-        res = pt.write_pandas(conn=sn.conn,df=self.data,table_name=self.name)
+        res = pt.write_pandas(conn=sn.conn,df=self.data,table_name=self.name.upper())
         return(res)
     
     def truncate_table(self,sn):
-        qry = TRUNCATE_TEMPLATE.substitute(db_name=DB_NAME,schema_name=SCHEMA_NAME,table_name=self.name)
+        qry = TRUNCATE_TEMPLATE.substitute(db_name=DB_NAME,schema_name=SCHEMA_NAME,table_name=self.name.upper())
         sn.conn.cursor().execute(qry)
         sn.conn.commit()
     
