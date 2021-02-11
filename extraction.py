@@ -1,11 +1,9 @@
 from support_funcs import *
 from config import *
+import pandas as pd
 
 sn = Snow()
-
-# ensure ETL table exists
-# qry = ETL_TABLE_SETUP.substitute(db_name=DB_NAME,schema_name=SCHEMA_NAME,table_name=ETL_LOG_TABLE)
-# sn.tb_check(qry)
+sn.info_table_prep()
 
 # open tickers
 with open('tickers.dat','r') as f:
@@ -23,5 +21,8 @@ for each in all_tickers:
     try:
         cur_series = FredDatum(each)
         res = cur_series.update_series_db(sn)
+        cols, data = cur_series.get_info()
+        data = escaper(data)
+        sn.upload_datum("'" + "','".join(data) + "'",",".join(cols),SERIES_INFO_TABLE)
     except Exception as e:
         print('Series {} had an error {}'.format(each,str(e)))
