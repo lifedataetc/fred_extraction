@@ -113,6 +113,10 @@ class FredDatum:
 
     def get_data(self):
         self.data = self.api_get_data()
+
+    def upload_data(self,sn):
+        res = pt.write_pandas(conn=sn.conn,df=self.data,table_name=self.name)
+        return(res)
     
     def truncate_table(self,sn):
         qry = TRUNCATE_TEMPLATE.substitute(db_name=DB_NAME,schema_name=SCHEMA_NAME,table_name=self.name.upper())
@@ -135,15 +139,3 @@ def escaper(data):
         escaped_data.append(escaped)
 
     return(escaped_data)
-
-# Depracated
-# def upload_series_info(series_info,sn):
-#     tbqry = SERIES_INFO_TABLE_SETUP.substitute(db_name=DB_NAME,schema_name=SCHEMA_NAME,table_name=SERIES_INFO_TABLE)
-#     sn.tb_check(tbqry)
-#     # clear table
-#     qry = TRUNCATE_TEMPLATE.substitute(db_name=DB_NAME,schema_name=SCHEMA_NAME,table_name=SERIES_INFO_TABLE)
-#     sn.conn.cursor().execute(qry)
-#     sn.conn.commit()
-#     # upload data
-#     res = sn.upload_data(series_info,SERIES_INFO_TABLE)
-#     return(res)
